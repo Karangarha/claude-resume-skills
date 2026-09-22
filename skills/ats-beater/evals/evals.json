@@ -1,0 +1,45 @@
+{
+  "skill_name": "ats-beater",
+  "note": "Drop your own resume into evals/files/ (e.g. resume.tex or resume.pdf) before running; the sample job posting is included. Assertions are the checks a report must satisfy regardless of the resume used.",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Can you run my resume through an ATS check? It's the LaTeX file at evals/files/resume.tex. I don't have a specific posting yet — I'm applying to AI / software engineering roles as a new grad. Tell me how it scores and what to fix.",
+      "expected_output": "A markdown report scoring the compiled PDF's text stream on the four ATS dimensions (parsing, keyword, formatting, structural) out of 100, a portfolio spread, a 'what the parser saw' excerpt, a keyword table labeled as an estimate (no posting), and a prioritized, point-valued fix list with Before → After rewrites that follow resume-guide rules. Placeholders flagged as unfilled metrics, never invented.",
+      "files": ["evals/files/resume.tex"],
+      "assertions": [
+        "Overall score out of 100 with a named band (strong / passable / at risk)",
+        "Four-dimension breakdown (parsing, keyword, formatting, structural) each with points",
+        "Portfolio spread across engine profiles is reported",
+        "Quotes the raw text stream the parser saw (a 'what the parser saw' excerpt)",
+        "Keyword table gives per-term mention counts and zone coverage (summary / skills / experience)",
+        "Density cap applied: 4+ mention terms flagged as stuffing risk, or 'none' stated explicitly",
+        "Fixes are ranked and carry point values and a dimension label ([+N pts · dimension])",
+        "Unfilled placeholders are flagged as unfilled metrics (not silently invented)",
+        "Rewrites shown as Before → After",
+        "Does not assert that a specific ATS platform will reject or accept the candidate",
+        "Keyword dimension is labeled an estimate because no job description was supplied"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Here's a job I want to apply for — the posting is saved at evals/files/job_posting_ai_swe.md (it's on Greenhouse). Score my resume (evals/files/resume.tex) against it and tell me exactly what to change to rank higher.",
+      "expected_output": "Same report structure, but the keyword table is built from the posting's required and preferred terms with mention counts and zone coverage, missing required terms are called out, the Greenhouse human-screen profile is reflected in the portfolio spread, and fixes are ranked by points recovered with rewrites following resume-guide rules.",
+      "files": ["evals/files/resume.tex", "evals/files/job_posting_ai_swe.md"],
+      "assertions": [
+        "Overall score out of 100 with a named band (strong / passable / at risk)",
+        "Four-dimension breakdown (parsing, keyword, formatting, structural) each with points",
+        "Portfolio spread across engine profiles is reported",
+        "Quotes the raw text stream the parser saw (a 'what the parser saw' excerpt)",
+        "Keyword table gives per-term mention counts and zone coverage (summary / skills / experience)",
+        "Density cap applied: 4+ mention terms flagged as stuffing risk, or 'none' stated explicitly",
+        "Fixes are ranked and carry point values and a dimension label ([+N pts · dimension])",
+        "Unfilled placeholders are flagged as unfilled metrics (not silently invented)",
+        "Rewrites shown as Before → After",
+        "Does not assert that a specific ATS platform will reject or accept the candidate",
+        "Missing required terms from the posting are called out",
+        "Greenhouse is recognized and the human-screen profile is applied or discussed"
+      ]
+    }
+  ]
+}
