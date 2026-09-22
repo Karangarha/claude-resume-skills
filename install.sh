@@ -17,6 +17,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/Karangarha/claude-resume-skills"
 TARBALL="$REPO_URL/archive/refs/heads/main.tar.gz"
+RAW="https://raw.githubusercontent.com/Karangarha/claude-resume-skills/main"
 
 usage() {
   cat <<'EOF'
@@ -60,9 +61,28 @@ else
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   echo "Downloading ${REPO_URL} (main) ..."
-  curl -fsSL "$TARBALL" | tar -xz -C "$tmp"
-  src="$(find "$tmp" -mindepth 2 -maxdepth 2 -type d -name skills | head -n 1)"
-  [ -n "$src" ] || { echo "download did not contain a skills/ folder" >&2; exit 1; }
+  # 1. release archive (fastest)
+  if curl -fsSL "$TARBALL" 2>/dev/null | tar -xz -C "$tmp" 2>/dev/null; then
+    src="$(find "$tmp" -mindepth 2 -maxdepth 2 -type d -name skills | head -n 1)"
+  fi
+  # 2. shallow git clone (some proxies block archive downloads but allow git)
+  if [ -z "$src" ] && command -v git >/dev/null 2>&1; then
+    echo "archive download blocked, trying git clone ..."
+    if git clone --quiet --depth 1 "$REPO_URL" "$tmp/repo" 2>/dev/null; then
+      src="$tmp/repo/skills"
+    fi
+  fi
+  # 3. file-by-file from raw.githubusercontent.com (works on networks that allow only raw)
+  if [ -z "$src" ]; then
+    echo "git clone blocked, fetching files individually ..."
+    manifest="$(curl -fsSL "$RAW/manifest.txt")" || { echo "cannot reach GitHub from this network" >&2; exit 1; }
+    for f in $manifest; do
+      mkdir -p "$tmp/raw/$(dirname "$f")"
+      curl -fsSL "$RAW/$f" -o "$tmp/raw/$f" || { echo "failed to download $f" >&2; exit 1; }
+    done
+    src="$tmp/raw/skills"
+  fi
+  [ -d "$src" ] || { echo "download did not contain a skills/ folder" >&2; exit 1; }
 fi
 
 available=()

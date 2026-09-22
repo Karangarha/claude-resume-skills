@@ -5,7 +5,7 @@ Skills for Claude that turn a resume into one that survives both the applicant t
 | Skill | What it does | Version |
 |---|---|---|
 | [`resume-guide`](skills/resume-guide/SKILL.md) | Writes, rewrites, tailors, and reviews resumes and cover letters using a unified guide built from the Harvard MCS and NYU Tisch career-office guides, plus ATS structure rules (canonical headings, parser-safe dates and layout, keyword zones and density cap, a text-extraction verification step). | 2.0.0 |
-| [`ats-beater`](skills/ats-beater/SKILL.md) | Scores a resume 0–100 the way ATS engines grade it — parsing accuracy, keyword coverage, formatting compliance, structural completeness — and returns a prioritized, point-valued fix list whose rewrites defer to `resume-guide`. | 1.0.0 |
+| [`ats-beater`](skills/ats-beater/SKILL.md) | Scores a resume 0–100 the way ATS engines grade it — parsing accuracy, keyword coverage, formatting compliance, structural completeness — and returns a prioritized, point-valued fix list whose rewrites defer to `resume-guide`. Ships `scripts/parse_resume.py`, a one-call parallel parser report. | 1.1.0 |
 
 Write with `resume-guide`, score with `ats-beater`, fix with `resume-guide`, re-score. On the first real run the pair took a one-page LaTeX resume from 71 to 95, every point measured on the compiled PDF rather than projected.
 
@@ -46,8 +46,8 @@ Then invoke a skill by name in Claude Code (`/ats-beater`, `/resume-guide`) or j
 
 Both skills degrade gracefully without code execution, but they are far more useful with it. For `ats-beater` install:
 
-- `poppler-utils` (`pdftotext`, `pdffonts`, `pdftoppm`) — the parser simulation
-- `pdfplumber` (Python) — glyph sizes and margins
+- `poppler-utils` (`pdftotext`, `pdffonts`, `pdftoppm`, `pdfinfo`) — the parser simulation
+- `pdfplumber` and `Pillow` (Python) — glyph sizes and ink margins
 - `pdflatex` — only if the resume source is LaTeX
 - `python-docx` — only for `.docx` resumes
 
@@ -76,7 +76,9 @@ What a score report contains: the overall score and band, the four-dimension bre
 ```
 skills/
   ats-beater/
-    SKILL.md            the skill (single file; rubric, workflow, report template, knowledge base)
+    SKILL.md            the skill (rubric, workflow, report template, knowledge base)
+    scripts/
+      parse_resume.py   one-call parallel parser: text stream, fonts, sizes, margins, headings, dates, keywords → JSON
     evals/
       evals.json        test prompts + assertions for the skill-creator eval loop
       files/            sample inputs (a job posting; supply your own resume)
@@ -84,6 +86,7 @@ skills/
     SKILL.md
 install.sh              installer for macOS / Linux / WSL (works piped from curl or from a clone)
 install.ps1             installer for Windows PowerShell
+manifest.txt            list of skill files; the installers' last-resort download path
 CHANGELOG.md            what changed, per skill, per version
 LICENSE                 MIT
 ```
@@ -99,7 +102,7 @@ description: What it does and, explicitly, when Claude should use it — the des
 ---
 ```
 
-Keep the body under ~500 lines; put large reference material in `references/` and executable helpers in `scripts/` next to `SKILL.md`, and point to them from the body. Add the skill to the table above and a section to `CHANGELOG.md`. If the skill has verifiable outputs, add `evals/evals.json` in the same shape as `ats-beater`'s so it can be run through the skill-creator eval loop.
+Keep the body under ~500 lines; put large reference material in `references/` and executable helpers in `scripts/` next to `SKILL.md`, and point to them from the body (see `ats-beater/scripts/parse_resume.py` for the pattern: one script, one call, JSON out, with a raw-URL fetch fallback noted in the SKILL.md for single-file installs). Add the skill to the table above, a section to `CHANGELOG.md`, and every file under `skills/<skill-name>/` to `manifest.txt` (the installers fall back to downloading files one by one from that list on networks that block GitHub archive downloads and git clone). If the skill has verifiable outputs, add `evals/evals.json` in the same shape as `ats-beater`'s so it can be run through the skill-creator eval loop.
 
 ## Versioning
 

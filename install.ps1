@@ -21,7 +21,9 @@ param(
   [Parameter(ValueFromRemainingArguments = $true)][string[]]$Skills
 )
 $ErrorActionPreference = "Stop"
-$RepoZip = "https://github.com/Karangarha/claude-resume-skills/archive/refs/heads/main.zip"
+$RepoUrl = "https://github.com/Karangarha/claude-resume-skills"
+$RepoZip = "$RepoUrl/archive/refs/heads/main.zip"
+$Raw     = "https://raw.githubusercontent.com/Karangarha/claude-resume-skills/main"
 
 if (-not $Target) {
   $Target = if ($Project) { Join-Path (Get-Location) ".claude\skills" } else { Join-Path $HOME ".claude\skills" }
@@ -34,12 +36,35 @@ if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "skills"))) {
 } else {
   $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("claude-resume-skills-" + [guid]::NewGuid())
   New-Item -ItemType Directory -Path $tmp | Out-Null
-  Write-Host "Downloading $RepoZip ..."
-  $zip = Join-Path $tmp "main.zip"
-  Invoke-WebRequest -Uri $RepoZip -OutFile $zip
-  Expand-Archive -Path $zip -DestinationPath $tmp
-  $src = Get-ChildItem -Path $tmp -Directory -Recurse -Depth 2 | Where-Object { $_.Name -eq "skills" } | Select-Object -First 1 -ExpandProperty FullName
-  if (-not $src) { throw "download did not contain a skills/ folder" }
+  Write-Host "Downloading $RepoUrl (main) ..."
+  # 1. release archive (fastest)
+  try {
+    $zip = Join-Path $tmp "main.zip"
+    Invoke-WebRequest -Uri $RepoZip -OutFile $zip
+    Expand-Archive -Path $zip -DestinationPath $tmp
+    $src = Get-ChildItem -Path $tmp -Directory -Recurse -Depth 2 | Where-Object { $_.Name -eq "skills" } | Select-Object -First 1 -ExpandProperty FullName
+  } catch { $src = $null }
+  # 2. shallow git clone (some proxies block archive downloads but allow git)
+  if (-not $src -and (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Host "archive download blocked, trying git clone ..."
+    try {
+      git clone --quiet --depth 1 $RepoUrl (Join-Path $tmp "repo") 2>$null
+      if (Test-Path (Join-Path $tmp "repo\skills")) { $src = Join-Path $tmp "repo\skills" }
+    } catch { $src = $null }
+  }
+  # 3. file-by-file from raw.githubusercontent.com (works on networks that allow only raw)
+  if (-not $src) {
+    Write-Host "git clone blocked, fetching files individually ..."
+    $manifest = (Invoke-WebRequest -Uri "$Raw/manifest.txt").Content -split "`n" | Where-Object { $_.Trim() }
+    foreach ($f in $manifest) {
+      $f = $f.Trim()
+      $dest = Join-Path (Join-Path $tmp "raw") ($f -replace '/', '\')
+      New-Item -ItemType Directory -Path (Split-Path $dest) -Force | Out-Null
+      Invoke-WebRequest -Uri "$Raw/$f" -OutFile $dest
+    }
+    $src = Join-Path $tmp "raw\skills"
+  }
+  if (-not (Test-Path $src)) { throw "download did not contain a skills/ folder" }
 }
 
 $available = Get-ChildItem -Path $src -Directory | Where-Object { Test-Path (Join-Path $_.FullName "SKILL.md") } | Select-Object -ExpandProperty Name

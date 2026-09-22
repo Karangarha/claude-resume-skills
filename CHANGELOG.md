@@ -2,6 +2,22 @@
 
 All notable changes to the skills in this repository. Each skill carries its own version; the repository is tagged when either one changes.
 
+## [1.1.0] — 2026-09-22
+
+### ats-beater 1.1.0
+
+- New `scripts/parse_resume.py`: one call replaces the eight-to-ten separate extraction commands. Compiles `.tex` on a scratch copy, then runs pdftotext (default + layout), pdffonts, glyph-size and ink-margin measurement concurrently, and analyzes the stream — contact block, canonical headings and zones, date styles (May-aware consistency check), placeholders, line-end hyphen joins, column-reorder suspects — plus keyword scoring from `--terms terms.json` (full rubric: presence, zone multiplier, acronym pairs, home-zone terms, stuffing flag) or a pruned-by-you starting list from `--jd posting.md`. Emits JSON + digest. `.docx` gets a body/table/header/footer/text-box audit.
+- Verified against the calibration resumes: keyword scores match the hand computation exactly (18.9 and 25.4 / 30); every defect found manually is flagged.
+- SKILL.md step 2 now runs the script (with a raw.githubusercontent.com fetch fallback for single-file installs) and falls back to manual commands only when it cannot run.
+- `manifest.txt` lists the script so the installers' last-resort path ships it.
+
+## [1.0.1] — 2026-09-22
+
+### Installers
+
+- `install.sh` and `install.ps1` now fall back when the GitHub archive download is blocked: shallow `git clone`, then file-by-file download from `raw.githubusercontent.com` using `manifest.txt`. Verified on a network that allows only raw.githubusercontent.com.
+- `manifest.txt` added (list every file under `skills/` when adding a skill).
+
 ## [1.0.0] — 2026-09-22
 
 ### ats-beater 1.0.0 (new)

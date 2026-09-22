@@ -1,0 +1,5 @@
+skills/ats-beater/SKILL.md
+skills/ats-beater/scripts/parse_resume.py
+skills/ats-beater/evals/evals.json
+skills/ats-beater/evals/files/job_posting_ai_swe.md
+skills/resume-guide/SKILL.md

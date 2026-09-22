@@ -12,9 +12,13 @@ Content rewrites are governed by the **resume-guide** skill (it may be listed as
 ## Workflow
 
 1. **Locate the inputs before asking for them.** The resume may be attached, pasted, in a connected folder, or in the attached Project's docs (a `.tex`, `.docx`, `.pdf`, or `.md`). The job description may be pasted, linked, or absent. Ask only for what cannot be found. Also note, if the user mentions it, which platform hosts the application portal (Workday, Greenhouse, Lever, Taleo, Ashby, iCIMS, SuccessFactors) — it changes which weight profile to emphasize.
-2. **Produce the text stream the ATS will see** (see "Simulating the parser"). Score the file the user will actually upload: for a LaTeX source, that is the compiled PDF, so compile it if `pdflatex` is available and otherwise ask for the PDF. Never score from the pretty rendering alone.
-3. **Extract the term list** from the job description (see "Building the keyword list"). With no job description, build a role baseline from the user's stated target role and the resume's own headline, and mark the keyword dimension as an estimate in the report.
-4. **Score all four dimensions** with the rubric below. Count keyword mentions with a script when code execution is available — eyeballed counts are unreliable and the density cap makes exact counts matter.
+2. **Produce the text stream the ATS will see — in one call.** Run the bundled parser, which does every extraction concurrently and returns one JSON report plus a digest:
+   ```bash
+   python3 scripts/parse_resume.py <resume.pdf|.tex|.docx> [--jd posting.md | --terms terms.json] [--out report.json]
+   ```
+   It lives next to this SKILL.md; if it is not there (the skill was saved as a single file), fetch it first: `curl -fsSL https://raw.githubusercontent.com/Karangarha/claude-resume-skills/main/skills/ats-beater/scripts/parse_resume.py -o parse_resume.py`. It compiles a `.tex` on a scratch copy, then runs pdftotext (default and `-layout`), pdffonts, glyph-size and ink-margin measurement in parallel, and analyzes the stream: contact block, headings and zones, date styles, placeholders, line-end hyphen joins, column-reorder suspects, and — with `--terms` or `--jd` — the keyword table. Read the digest first, then quote trouble spots from the JSON's `stream` field. Score the file the user will actually upload (for LaTeX, the compiled PDF); never score from the pretty rendering alone. Only when the script cannot run (no Python or poppler) fall back to the manual commands in "Simulating the parser".
+3. **Extract the term list** from the job description (see "Building the keyword list"). `--jd posting.md` auto-extracts a candidate list that you must prune ("Flask or Django" is not two required terms; drop what the posting merely mentions); then write `terms.json` in the format in the script's header and re-run with `--terms`. With no job description, write a role baseline from the user's stated target role and the resume's own headline, and mark the keyword dimension as an estimate in the report.
+4. **Score all four dimensions** with the rubric below, using the report's numbers — eyeballed counts are unreliable and the density cap makes exact counts matter.
 5. **Rank the fixes by points recovered** and write the report using the exact template in "Report format". Every fix names the dimension it repairs, the points it is worth, and shows Before → After for anything rewritten. Rewrites follow resume-guide.
 6. **Offer to apply the fixes.** Do not edit the user's file unless they ask. When they do, edit in their existing format (LaTeX, Word, Markdown), preserve their template, re-run steps 2–4, and report the new score next to the old one.
 
@@ -22,7 +26,9 @@ Content rewrites are governed by the **resume-guide** skill (it may be listed as
 
 The parser's first step is the one that silently kills resumes: raw ingestion strips styling, column grids, text boxes, headers, and footers, and reads what remains left-to-right, top-to-bottom. Reproduce that, then read the result the way NER would.
 
-Extraction by file type (prefer running these; if code execution is unavailable, read the file as literally as possible and say the parse was simulated by inspection):
+`scripts/parse_resume.py` does everything in this section in one run (about two seconds for a one-page PDF). What follows explains what its report is checking and what to run by hand if the script is unavailable; if code execution is unavailable altogether, read the file as literally as possible and say the parse was simulated by inspection.
+
+Extraction by file type:
 
 - **PDF** — `pdftotext file.pdf -` in default (non-layout) mode gives the reading order most parsers use and is the stream you score; `pdftotext -layout` shows the visual grid. Compare them: text that is coherent in `-layout` but scrambled in default mode is exactly what a multi-column or table layout does to a parser. Check that the output is real text (a scanned or image PDF yields nothing), that ligatures and symbols survive (no `ﬁ`, `•` turning into `ï`, or words fused together — a LaTeX file should carry `\input{glyphtounicode}` and `\pdfgentounicode=1`), and that fonts are embedded. One cross-check with a second extractor (pdfplumber) is worth doing only where the default stream looks wrong; running four extractors on a clean file is wasted time.
 - **Measure, don't trust, the font size.** Read the actual glyph sizes from the PDF (pdfplumber `page.chars` → `size`, or `pdffonts` plus a look at the smallest run) and report the smallest size used for body text. Templates lie: `\usepackage[scaled]{helvet}` renders `\small` at 9.5 pt while the file's comments say 10 pt, and Word templates ship 9 pt body styles. Also count font families — a `|` separator drawn from a math symbol font is a second family. Measure margins from a rendered page (first inked pixel at 300 dpi), not from glyph bounding boxes: a large name line reports a 0.47" top margin from its font box when the ink starts at 0.50".
@@ -38,7 +44,7 @@ A layout defect is scored twice only when it does damage twice: the cause is ded
 
 Production engines sort and triage with weighted formulas; they rarely hard-reject on a percentage (bias-governance rules such as New York City Local Law 144 discourage it), but a low score buries the candidate in the queue. Weights below come from the observed ranges — Parsing 35%, Keyword 30–45%, Formatting 20–35%, Structural 10–25% — and are fixed to sum to 100. Lines marked *(working assumption)* are this skill's calibration choices, not published facts; adjust them when better source material arrives.
 
-**Weight profiles** — score once with the default, then report the spread under the other two so the user sees the portfolio effect:
+**Weight profiles** — headline the default profile's score, or the named engine's profile when the user says where they are applying (Greenhouse → human-screen-first); the spread line always carries all three so the user sees the portfolio effect:
 
 | Profile | Use when | Parsing | Keyword | Formatting | Structural |
 |---|---|---|---|---|---|
@@ -107,11 +113,11 @@ Flag: bullets with no metric; openers like "worked on", "helped", "responsible f
 
 ## Building the keyword list
 
-Read the job description twice. First pass: pull every hard skill, tool, language, framework, platform, methodology, certification, degree requirement, and the exact job title. Second pass: sort them into **required** (appears under must-have / requirements / qualifications, or is repeated) and **preferred** (nice-to-have, bonus, plus). Drop soft-skill filler ("team player", "fast-paced") unless the posting repeats it emphatically — engines weigh hard skills. Keep the JD's exact phrasing as the canonical form and list accepted variants beside it.
+Read the job description twice. First pass: pull every hard skill, tool, language, framework, platform, methodology, certification, degree requirement, and the exact job title. Second pass: sort them into **required** — anything under requirements / qualifications / must-have, and anything in the responsibilities ("what you'll do") list, since that is the job's core work — and **preferred** (nice-to-have, bonus, "a plus"). An alternative such as "FastAPI, Flask, or Django" is one required term with three variants, not three required terms; "Azure or AWS" likewise. Drop soft-skill filler ("team player", "fast-paced") unless the posting repeats it emphatically — engines weigh hard skills. Keep the JD's exact phrasing as the canonical form and list accepted variants beside it (a plain space in a variant also matches a line wrap or a hyphen; overlapping variants count a phrase once).
 
 Without a job description, assemble a role baseline of 12–20 terms: the target title, the 6–8 core technologies that title implies, and the user's own headline skills — and say in the report that it is a baseline.
 
-**Counting mentions by zone** — when code execution is available, write and run a short script rather than counting by hand. Sketch (adapt the term table to the posting):
+**Counting mentions by zone** — `parse_resume.py --terms terms.json` applies the whole rubric (presence, zone multiplier, first-use acronym pairs counted once, home-zone terms, stuffing flag) and reports `score_of_30`, `missing`, `single_zone`, `over_cap`, and `at_cap_3` (terms that must stay out of any new text). If the script is unavailable, count with a short script rather than by hand — sketch (adapt the term table to the posting):
 
 ```python
 import re, sys
@@ -140,10 +146,10 @@ Feed the pdftotext output (default mode) to the script so the counts reflect wha
 Use this exact structure. Keep the prose tight; the tables carry the detail.
 
 ```
-# ATS Score: NN/100 — <band>
+# ATS Score: NN/100 — <band>   (<default | named-engine> profile)
 Target: <role @ company> | no job description — keyword dimension is an estimate
 Scored file: <name> (<format>, <pages> page) · parsed with <method>
-Portfolio spread: NN (keyword-first engines) – NN (human-screen engines)
+Portfolio spread: NN default · NN keyword-first (Workday, Taleo, iCIMS, Ashby) · NN human-screen (Greenhouse, Lever)
 
 ## Score breakdown
 | Dimension | Points | What drove it |
@@ -177,7 +183,7 @@ Say "apply the fixes" and I'll edit <file> in place and re-score it.
 
 Ordering rule for fixes: sort by points recovered, break ties by effort (a heading rename beats a bullet rewrite). Put unfilled placeholders and missing contact fields first when present — they are the cheapest points on the page. Round fix values to whole points (halves at most); the rubric is not precise enough to justify "+7.75".
 
-**Make the point values real.** When code execution is available, apply the structural fixes (heading changes, table rework, summary insertion, font fix) to a scratch copy, recompile or re-save, re-extract, and re-count — then report the measured post-fix score and confirm the page count did not grow. A projected score that was actually compiled is worth far more to the user than one that was guessed, and it catches the fix that silently pushes the resume onto page two.
+**Make the point values real — when the source is in hand.** If the user supplied an editable source (`.tex`, `.docx`, `.md`), apply the structural fixes to a scratch copy, recompile or re-save, re-run the parser, and report the measured post-fix score. Compare page fit against a baseline build of the *unmodified* source made in the same environment, not against the user's PDF: different fonts or TeX versions can shift line breaks, so the check is "did my edits add lines or spill relative to that baseline". If the user supplied only a PDF, do not go hunting for a source that reproduces it — edit the extracted stream text, re-run the parser with `--terms` on that edited text, report the projected score, and say plainly that page fit is unverified. Verified numbers are worth more than guessed ones, but five tool calls spent reconstructing a source are worth less than a clearly labeled projection.
 
 **Keep the report readable.** Show Before → After on the changed fragment, not the whole entry; include source code (LaTeX, Word XML) only for fixes that change structure. Questions for the user (unverifiable facts that would close a keyword gap) go in one numbered fix near the end, each phrased as "if true, where it goes". Facts that help the human screen but carry no rubric points — city/state in the contact line for location filters, tense consistency once a role becomes "Present" — get a line, not a section.
 
@@ -200,3 +206,5 @@ This section records the source material folded into the rubric so later additio
 **Lesson 1 — "How ATS reads, maps, and scores resumes" (added 2026-09-21).** Ingestion pipeline: file → linear character stream → NER segmentation → taxonomy mapping → structured record (JSON / HR-XML); the record, not the document, is what gets queried. Market: Workday holds 39%+ of the Fortune 500 install base, SAP SuccessFactors second; enterprise HCM suites use rigid multi-page validation forms; mid-market — Greenhouse (structured hiring, scorecards, manual review), Ashby (analytics, unified CRM), Lever (passive-candidate nurturing); Ashby and Workday behave like automated checklists, Greenhouse like a human-led side-by-side screen. Scoring dimensions and ranges: Parsing Accuracy 35%, Keyword Coverage 30–45%, Formatting Compliance 20–35%, Structural Completeness 10–25%; enterprise platforms rarely auto-reject on a pure percentage (NYC Local Law 144) but do rank with these formulas. Density cap: mentions 1–2 full weight, 3 marginal, 4+ zero and possible anti-spam penalty. Zone rule: full keyword weight only when a term appears in summary, categorized skills, and experience bullets. Failure modes: multi-column layouts, tables for alignment, text boxes/sidebars, contact info in headers/footers, creative section titles. Human layer: recruiters scan 6–10 seconds; bullet formula Action Verb + Context/Tech Stack + Quantifiable Outcome; write both spelled-out term and acronym. Summary strategies: design for a portfolio of engines (Taleo, Workday, Greenhouse), single-column .docx or text PDF, distribute keywords across the three zones, respect density caps, canonical headings and clear dates (MM/YYYY). Study cited: 4,000+ resumes across five production engines, average 23-point spread on identical files.
 
 **Calibration from test runs (2026-09-21).** Scoring a real one-page LaTeX resume surfaced the rules now written into the rubric: multi-row `tabular*` headings extract column-first; declared font sizes must be measured from the PDF; acronym first-use pairs count once; degree and certification terms score in their home zone; adding a summary can push terms over the density cap; point values should be verified by recompiling a scratch copy. Replace these with source-backed rules if later material contradicts them.
+
+**Tooling (2026-09-22).** `scripts/parse_resume.py` bundles the extraction and analyses into one parallel run; it reproduces the hand-computed keyword scores of the calibration resumes exactly (18.9 and 25.4 of 30) and flags every defect found by hand in them. The saving is mostly in tool round-trips, not CPU: the extraction itself is ~2 s either way. Source: https://github.com/Karangarha/claude-resume-skills.
